@@ -35,6 +35,7 @@ Packages come in many shapes and sizes and `PKGBUILD` files have to be robust en
 5. Remove all functions other than `package()`
 6. Use the `package()` function to describe how to stage your files
 7. If you need to run any commands to configure your software post installation, write them in a shell script and reference that script in the `install` variable of your `PKGBUILD`
+8. If you want to have `makepkg` run file integrity checks, you can include them in the default `sha256sums` variable
 
 ## Packaging and Installing
 The last part is the easiest - `makepkg` will process the PKGBUILD to create a complete package that `pacman` can use to install.
@@ -43,4 +44,31 @@ The last part is the easiest - `makepkg` will process the PKGBUILD to create a c
 3. Use `pacman -U your-package.pkg.tar.zst` to install the package
 
 ## Putting It All Together
-While the above sections do spell out the process in a simplified manner, there 
+This section will try to put the steps above into context by referencing where/how they're put together in this repository.
+
+1. Set the PKGBUILD variables for my project:
+ - set `pkgname=battery-limit` as a name is needed
+ - set `pkgdesc` to something useful so that it stands out in pacman
+ - set `arch=(any)` as an architecture is needed
+ - optional: set `license=('unknown')` because the default GPL was flagging as an issue in my editor (it wasn't)
+ - set `install="battery-limit.install"` to bundle my post-install script (more on that later)
+ - set `source=("battery-limit.service")` to include my systemd service file (the thing I want to install)
+ - remove the `sha256sums` variable - `makepkg` supports a variety of file integrity checks, but you can bundle them into `cksums` instead
+ - add and set `cksums=("SKIP")` because I don't care about file integrity checks for a local script
+
+2. Strip out all functions other than `package()`
+3. Use `package()` to stage the files for the final package
+ - `makepkg` will copy your `source` files into `<package-directory>/src` which it will expose as a variable named `srcdir`
+ - The expectation is that you would use the other `PKGBUILD` functions to prepare/compile etc the files in `srcdir`
+ - `makepkg` will create a directory at `<package-directory>/pkg` which it will expose in the variable `pkgdir`
+ - The expectation is that you move your prepared files into `pkgdir` imitating the directory structure they will be installed to in your live system
+ - The destination for my service file is `/etc/systemd/system/battery-limit.service`
+ - I use the `install` tool (mostly because almost all PKGBUILDs I referenced used it too) to copy the service from `srcdir` into `pkgdir/etc/systemd/system/battery-limit.service`
+4. Write the post install script in `battery-limit.install`
+ - It's just a bash script, the convention is to name it package.install but you can call it whatever you like
+ - To use the script after installation, systemd needs to be told to reload the list of services it has, so this script does exactly that by running `systemctl daemon-reload`
+ - It's supposedly against Arch conventions to automatically start a service, so I maintained that convention here
+5. Run `makepkg` to generate the package
+ - The generated package file will be named based on the variables you have set in your `PKGBUILD`
+ - `pkgdesc-pkgver-pkgrel-arch.pkg.tar.zst` is the format it used on my system
+6. Run `pacman -U your-package.pkg.tar.zst` to install your package
